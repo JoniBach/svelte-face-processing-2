@@ -326,7 +326,7 @@
 		top: 0;
 		left: 0;
 		width: 100%;
-		max-width: clamp(200px, 50vw, 50vw);
+		max-width: 200px;
 		color: white;
 		padding: 20px;
 		box-sizing: border-box;
