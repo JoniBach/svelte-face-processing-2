@@ -5,18 +5,32 @@ import TRIANGULATION from './TRIANGULATION.json';
 import OUTERRING from './OUTERRING.json';
 
 /**
- * Initialize the face landmarks detector
+ * Initialize WebGL backend and face landmarks detector
  * @returns {Promise<Object>} - A promise that resolves to the face detector model
  */
 async function initializeDetector() {
-	return await faceLandmarksDetection.createDetector(
-		faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
-		{
-			runtime: 'tfjs',
-			maxFaces: 1
+	try {
+		// Initialize WebGL backend with high performance settings
+		if (tf.getBackend() !== 'webgl') {
+			await tf.setBackend('webgl');
+			await tf.ready();
 		}
-	);
+
+		return await faceLandmarksDetection.createDetector(
+			faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
+			{
+				runtime: 'tfjs',
+				maxFaces: 1,
+				modelType: 'short', // Use a smaller model for mobile compatibility
+				enableSmoothing: true
+			}
+		);
+	} catch (error) {
+		console.error('Failed to initialize WebGL or detector:', error);
+		throw error;
+	}
 }
+
 /**
  * Perform facial landmark detection on an image and generate visualization data.
  * @param {string} imageUrl - The URL of the image to process
