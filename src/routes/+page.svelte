@@ -20,6 +20,7 @@
 	let visualizations = {};
 	let stage = 'upload';
 	let loadingStage = false;
+	let errorMessage = '';
 
 	let isUvFaceInScene = false;
 	let isWireframeInScene = false;
@@ -34,32 +35,42 @@
 		triangulationColor: 'cyan',
 		triangulationWidth: 2,
 		invertDepth: true,
-		scaleFactor: 1, // Placeholder, set dynamically
-		baseElevation: 5 // Elevation above the canvas floor in 3D units
+		scaleFactor: 1,
+		baseElevation: 5
 	};
 
-	const targetSceneWidth = 10; // Target width in 3D scene units
+	const targetSceneWidth = 10;
 
 	onMount(() => {
-		mainScene = createThreeDScene({
-			canvas,
-			width: window.innerWidth * 0.8,
-			height: window.innerHeight,
-			backgroundColor: 0x202020
-		});
+		try {
+			mainScene = createThreeDScene({
+				canvas,
+				width: window.innerWidth * 0.8,
+				height: window.innerHeight,
+				backgroundColor: 0x202020
+			});
+		} catch (error) {
+			console.error('Error initializing 3D scene:', error);
+			errorMessage = 'Failed to initialize the 3D scene.';
+		}
 	});
 
 	async function loadImage(url) {
-		return new Promise((resolve, reject) => {
-			const img = new Image();
-			img.crossOrigin = 'Anonymous';
-			img.src = url;
-			img.onload = () => resolve(img);
-			img.onerror = (error) => {
-				console.error(`Failed to load image from URL: ${url}`, error);
-				reject(error);
-			};
-		});
+		try {
+			return await new Promise((resolve, reject) => {
+				const img = new Image();
+				img.crossOrigin = 'Anonymous';
+				img.src = url;
+				img.onload = () => resolve(img);
+				img.onerror = (error) => {
+					console.error(`Failed to load image from URL: ${url}`, error);
+					reject(error);
+				};
+			});
+		} catch (error) {
+			errorMessage = 'Failed to load image.';
+			throw error;
+		}
 	}
 
 	function handleImageUpload(event) {
@@ -71,42 +82,51 @@
 	}
 
 	async function handleAddToCanvas() {
-		if (mainScene && imageFile) {
-			try {
-				const success = await addImageToScene(mainScene, imageFile);
-				if (success) {
-					imageInScene = true;
-
-					// Load the image to get its width
-					const img = await loadImage(imageUrl);
-
-					// Set scaleFactor dynamically based on image width
-					config.scaleFactor = targetSceneWidth / img.width;
-				}
-			} catch (error) {
-				console.error('Error adding image to canvas:', error);
-			}
-		} else {
+		if (!mainScene || !imageFile) {
+			errorMessage = 'Image or scene is missing.';
 			console.warn('No image file or scene available to add to canvas.');
+			return;
+		}
+
+		try {
+			const success = await addImageToScene(mainScene, imageFile);
+			if (success) {
+				imageInScene = true;
+				const img = await loadImage(imageUrl);
+				config.scaleFactor = targetSceneWidth / img.width;
+			}
+		} catch (error) {
+			console.error('Error adding image to canvas:', error);
+			errorMessage = 'Failed to add image to canvas.';
 		}
 	}
 
 	async function createPredictions() {
 		loadingStage = true;
-		if (!imageUrl) return;
-
-		const { handlePredictions } = await import('$lib/handlePredictions.js');
-		visualizations = await handlePredictions(imageUrl, config);
-
-		if (visualizations.vertices && visualizations.indices) {
-			console.log('Predictions data for 3D:', visualizations);
-		} else {
-			console.warn('Predictions did not return vertices or indices for 3D rendering.');
+		errorMessage = '';
+		if (!imageUrl) {
+			errorMessage = 'No image URL provided for predictions.';
+			return;
 		}
 
-		stage = 'prediction';
-		loadingStage = false;
-		addOverlays();
+		try {
+			const { handlePredictions } = await import('$lib/handlePredictions.js');
+			visualizations = await handlePredictions(imageUrl, config);
+
+			if (!visualizations.vertices || !visualizations.indices) {
+				console.warn('Predictions did not return vertices or indices for 3D rendering.');
+				errorMessage = 'Prediction data is incomplete for 3D rendering.';
+			} else {
+				console.log('Predictions data for 3D:', visualizations);
+				stage = 'prediction';
+			}
+		} catch (error) {
+			console.error('Error generating predictions:', error);
+			errorMessage = 'Failed to generate predictions.';
+		} finally {
+			loadingStage = false;
+			addOverlays();
+		}
 	}
 
 	async function addOverlays(event) {
@@ -115,26 +135,35 @@
 			showOuterRing: true,
 			showTriangulation: true
 		};
-		const img = await loadImage(imageUrl);
+		try {
+			const img = await loadImage(imageUrl);
+			const imageAspectRatio = img.width / img.height;
+			const baseHeight = 10;
 
-		const imageAspectRatio = img.width / img.height;
-		const baseHeight = 10;
-
-		await addOverlaysToScene(
-			mainScene,
-			visualizations,
-			showTriangulation,
-			showOuterRing,
-			showKeypoints,
-			imageAspectRatio,
-			baseHeight
-		);
+			await addOverlaysToScene(
+				mainScene,
+				visualizations,
+				showTriangulation,
+				showOuterRing,
+				showKeypoints,
+				imageAspectRatio,
+				baseHeight
+			);
+		} catch (error) {
+			console.error('Error adding overlays to scene:', error);
+			errorMessage = 'Failed to add overlays.';
+		}
 	}
 
 	function clearOverlays() {
-		clearScene(mainScene);
-		imageInScene = false;
-		stage = 'upload';
+		try {
+			clearScene(mainScene);
+			imageInScene = false;
+			stage = 'upload';
+		} catch (error) {
+			console.error('Error clearing overlays:', error);
+			errorMessage = 'Failed to clear overlays.';
+		}
 	}
 
 	function handleAdd3DObjects() {
@@ -145,12 +174,12 @@
 
 	async function add3DObjects() {
 		if (!visualizations.vertices || !visualizations.indices) {
-			console.warn('No vertices or indices available in visualizations for 3D objects.');
+			errorMessage = 'No vertices or indices available for 3D objects.';
 			return;
 		}
 
 		if (!imageUrl) {
-			console.warn('No valid imageUrl available for loading the 3D objects.');
+			errorMessage = 'No valid image URL for loading 3D objects.';
 			return;
 		}
 
@@ -169,17 +198,18 @@
 			console.log('3D Wireframe added to the canvas.');
 		} catch (error) {
 			console.error('Error adding 3D objects:', error);
+			errorMessage = 'Failed to add 3D objects.';
 		}
 	}
 
 	async function addTexturedFace() {
 		if (!visualizations.vertices || !visualizations.indices) {
-			console.warn('No vertices or indices available for the textured face model.');
+			errorMessage = 'No vertices or indices available for the textured face model.';
 			return;
 		}
 
 		if (!imageUrl) {
-			console.warn('No valid imageUrl available for loading the 3D texture.');
+			errorMessage = 'No valid image URL for loading 3D texture.';
 			return;
 		}
 
@@ -190,6 +220,7 @@
 			console.log('Textured 3D Face Model added to the scene.');
 		} catch (error) {
 			console.error('Error adding textured 3D face model:', error);
+			errorMessage = 'Failed to add textured 3D face model.';
 		}
 	}
 
@@ -228,6 +259,10 @@
 <div class="sidebar">
 	<h1>Image to Mesh 3D</h1>
 	<p>Upload a portrait to get started</p>
+
+	{#if errorMessage}
+		<p class="error">{errorMessage}</p>
+	{/if}
 
 	{#if stage === 'upload' || stage === 'preview'}
 		{#if loadingStage}
@@ -282,7 +317,7 @@
 		width: 100%;
 		height: 100%;
 		display: block;
-		background-color: #202020; /* Adjust as needed */
+		background-color: #202020;
 		position: absolute;
 	}
 
@@ -291,7 +326,7 @@
 		top: 0;
 		left: 0;
 		width: 100%;
-		max-width: 40vw;
+		max-width: clamp(200px, 50vw, 50vw);
 		color: white;
 		padding: 20px;
 		box-sizing: border-box;
@@ -312,5 +347,10 @@
 
 	button:hover {
 		background-color: #0056b3;
+	}
+
+	.error {
+		color: red;
+		margin-bottom: 10px;
 	}
 </style>
