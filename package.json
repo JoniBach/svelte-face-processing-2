@@ -51,6 +51,8 @@
 		"vite": "^5.0.11"
 	},
 	"dependencies": {
+		"@tensorflow-models/face-landmarks-detection": "^1.0.6",
+		"@tensorflow/tfjs": "^4.22.0",
 		"three": "^0.170.0"
 	}
 }
