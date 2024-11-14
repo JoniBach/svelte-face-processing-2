@@ -5,7 +5,7 @@
 
 	const dispatch = createEventDispatcher();
 
-	// Function to handle file selection and dispatch a custom event
+	// Handle file upload and dispatch imageUpload event
 	function handleFileUpload(event) {
 		imageUrl = '';
 		const file = event.target.files[0];
@@ -14,31 +14,43 @@
 		}
 	}
 
-	// Dispatch custom event for adding image to canvas
+	// Dispatch addToCanvas event to add the image to the canvas
 	function handleAddToCanvas() {
 		dispatch('addToCanvas');
+	}
+
+	// Dispatch processImage event to start processing the image for predictions
+	function handleProcessImage() {
+		dispatch('processImage');
+	}
+
+	function handleSubmit() {
+		dispatch('submit');
 	}
 </script>
 
 <div>
-	<!-- Display uploaded image if it exists -->
-	{#if imageUrl}
+	{#if !imageUrl}
+		<!-- Show file upload button initially -->
+		<label class="upload-button">
+			<input type="file" accept="image/*" on:change={handleFileUpload} />
+			Upload Image
+		</label>
+	{:else}
+		<!-- Display uploaded image preview with options to add or process -->
 		<div class="image-box">
 			<img src={imageUrl} alt="Uploaded Image" />
 		</div>
 
-		<!-- Action buttons -->
-		<button on:click={handleAddToCanvas}>Add to Canvas</button>
-		<!-- Change Image button reuses file input for upload -->
+		<!-- Action buttons for add to canvas and process image -->
+		<!-- <button on:click={handleAddToCanvas}>Add to Canvas</button> -->
+		<!-- <button on:click={handleProcessImage}>Process Image for Face Mapping</button> -->
+		<button on:click={handleSubmit}>Analyse face</button>
+
+		<!-- Option to change the image -->
 		<label class="upload-button">
 			<input type="file" accept="image/*" on:change={handleFileUpload} />
 			Change Image
-		</label>
-	{:else}
-		<!-- Image upload input styled as a button -->
-		<label class="upload-button">
-			<input type="file" accept="image/*" on:change={handleFileUpload} />
-			Upload Image
 		</label>
 	{/if}
 </div>
