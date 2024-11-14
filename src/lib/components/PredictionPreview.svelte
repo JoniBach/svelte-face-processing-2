@@ -20,25 +20,31 @@
 	function handleClearOverlays() {
 		dispatch('clearOverlays');
 	}
+
+	$: console.log('PredictionPreview', { imageUrl, visualizations });
 </script>
 
 <div>
 	<h2>Overlay Preview</h2>
-	<div class="image-box">
-		{#if imageUrl && showOriginalImage}
-			<img src={imageUrl} alt="Original Image" class="original-image" />
-		{/if}
+	{#if visualizations}
+		<div class="image-box">
+			{#if imageUrl && showOriginalImage}
+				<img src={imageUrl} alt="Original Image" class="original-image" />
+			{/if}
 
-		{#if showKeypoints && visualizations.keypointsImage}
-			<img src={visualizations.keypointsImage} alt="Keypoints" class="overlay" />
-		{/if}
-		{#if showOuterRing && visualizations.outerRingImage}
-			<img src={visualizations.outerRingImage} alt="Outer Ring" class="overlay" />
-		{/if}
-		{#if showTriangulation && visualizations.triangulationImage}
-			<img src={visualizations.triangulationImage} alt="Triangulation" class="overlay" />
-		{/if}
-	</div>
+			{#if showKeypoints && visualizations.keypointsImage}
+				<img src={visualizations.keypointsImage} alt="Keypoints" class="overlay" />
+			{/if}
+			{#if showOuterRing && visualizations.outerRingImage}
+				<img src={visualizations.outerRingImage} alt="Outer Ring" class="overlay" />
+			{/if}
+			{#if showTriangulation && visualizations.triangulationImage}
+				<img src={visualizations.triangulationImage} alt="Triangulation" class="overlay" />
+			{/if}
+		</div>
+	{:else}
+		<p>No visualizations available.</p>
+	{/if}
 
 	<!-- Toggle buttons for each overlay type -->
 	<!-- {#if imageUrl}
