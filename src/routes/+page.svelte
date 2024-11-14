@@ -13,12 +13,12 @@
 	import { add3DObjectsToScene } from '$lib/handle3DObjects.js';
 
 	const config = {
-		pointSize: 3,
+		pointSize: 4,
 		pointColor: 'purple',
 		outerRingColor: 'orange',
-		outerRingWidth: 3,
+		outerRingWidth: 4,
 		triangulationColor: 'cyan',
-		triangulationWidth: 1.5,
+		triangulationWidth: 2,
 		invertDepth: true
 	};
 
@@ -29,6 +29,7 @@
 	let imageInScene = false;
 	let visualizations = {};
 	let stage = 'upload';
+	let loadingStage = false;
 
 	// Initialize the 3D scene on mount
 	onMount(() => {
@@ -63,6 +64,7 @@
 		imageUrl = URL.createObjectURL(imageFile);
 		imageInScene = false;
 		stage = 'preview';
+		handleAddToCanvas();
 	}
 
 	async function handleAddToCanvas() {
@@ -79,6 +81,7 @@
 	}
 
 	async function createPredictions() {
+		loadingStage = true;
 		if (!imageUrl) return;
 
 		const { handlePredictions } = await import('$lib/handlePredictions.js');
@@ -91,10 +94,16 @@
 		}
 
 		stage = 'prediction';
+		loadingStage = false;
+		addOverlays();
 	}
 
 	async function addOverlays(event) {
-		const { showKeypoints, showOuterRing, showTriangulation } = event.detail;
+		const { showKeypoints, showOuterRing, showTriangulation } = event?.detail || {
+			showKeypoints: true,
+			showOuterRing: true,
+			showTriangulation: true
+		};
 		const img = await loadImage(imageUrl);
 
 		const imageAspectRatio = img.width / img.height;
@@ -141,7 +150,6 @@
 
 	function handleFileSubmit() {
 		stage = 'prediction';
-		handleAddToCanvas();
 		createPredictions();
 	}
 </script>
@@ -152,17 +160,24 @@
 
 		<!-- Display FileUploader for file selection and preview -->
 		{#if stage === 'upload' || stage === 'preview'}
-			<FileUploader {imageUrl} on:imageUpload={handleImageUpload} on:submit={handleFileSubmit} />
+			{#if loadingStage}
+				<p>Loading... {stage}</p>
+			{:else}
+				<FileUploader {imageUrl} on:imageUpload={handleImageUpload} on:submit={handleFileSubmit} />
+			{/if}
 
 			<!-- PredictionPreview for toggling overlays, adding to canvas, and adding 3D objects -->
 		{:else if stage === 'prediction'}
-			<PredictionPreview
-				{imageUrl}
-				{visualizations}
-				on:addToCanvas={addOverlays}
-				on:clearOverlays={clearOverlays}
-			/>
-			<button on:click={add3DObjects}>Add 3D Objects to Canvas</button>
+			{#if loadingStage}
+				<p>Loading... {stage}</p>
+			{:else}
+				<PredictionPreview
+					{imageUrl}
+					{visualizations}
+					on:addToCanvas={add3DObjects}
+					on:clearOverlays={clearOverlays}
+				/>
+			{/if}
 		{/if}
 	</div>
 

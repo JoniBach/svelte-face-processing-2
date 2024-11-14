@@ -13,11 +13,7 @@
 
 	// Toggle visibility of overlays and dispatch addToCanvas
 	function handleAddToCanvas() {
-		dispatch('addToCanvas', {
-			showKeypoints,
-			showOuterRing,
-			showTriangulation
-		});
+		dispatch('addToCanvas');
 	}
 
 	// Clear overlays
@@ -45,7 +41,7 @@
 	</div>
 
 	<!-- Toggle buttons for each overlay type -->
-	{#if imageUrl}
+	<!-- {#if imageUrl}
 		<button on:click={() => (showOriginalImage = !showOriginalImage)}>
 			{showOriginalImage ? 'Hide' : 'Show'} Original Image
 		</button>
@@ -64,11 +60,12 @@
 		<button on:click={() => (showTriangulation = !showTriangulation)}>
 			{showTriangulation ? 'Hide' : 'Show'} Triangulation
 		</button>
-	{/if}
+	{/if} -->
 
 	<!-- Action buttons to add overlays to canvas or clear them -->
-	<button on:click={handleAddToCanvas}>Add to Canvas</button>
-	<button on:click={handleClearOverlays}>Clear Overlays</button>
+	<!-- <button on:click={handleAddToCanvas}>Add to Canvas</button> -->
+	<button on:click={handleClearOverlays}>Clear Predictions</button>
+	<button on:click={handleAddToCanvas}>Generate 3D Wireframe</button>
 </div>
 
 <style>
