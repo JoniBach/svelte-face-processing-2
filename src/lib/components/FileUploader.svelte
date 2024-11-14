@@ -45,7 +45,7 @@
 		<!-- Action buttons for add to canvas and process image -->
 		<!-- <button on:click={handleAddToCanvas}>Add to Canvas</button> -->
 		<!-- <button on:click={handleProcessImage}>Process Image for Face Mapping</button> -->
-		<button on:click={handleSubmit}>Analyse face</button>
+		<button on:click={handleSubmit}>Analyze face</button>
 
 		<!-- Option to change the image -->
 		<label class="upload-button">

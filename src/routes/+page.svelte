@@ -10,17 +10,7 @@
 	import FileUploader from '../lib/components/FileUploader.svelte';
 	import PredictionPreview from '../lib/components/PredictionPreview.svelte';
 	import { addOverlaysToScene, clearScene } from '$lib/handlePredictionPreview.js';
-	import { add3DObjectsToScene } from '$lib/handle3DObjects.js';
-
-	const config = {
-		pointSize: 4,
-		pointColor: 'purple',
-		outerRingColor: 'orange',
-		outerRingWidth: 4,
-		triangulationColor: 'cyan',
-		triangulationWidth: 2,
-		invertDepth: true
-	};
+	import { add3DObjectsToScene, generateUVTexturedFace } from '$lib/handle3DObjects.js';
 
 	let canvas;
 	let imageFile = null;
@@ -31,7 +21,25 @@
 	let stage = 'upload';
 	let loadingStage = false;
 
-	// Initialize the 3D scene on mount
+	let isUvFaceInScene = false;
+	let isWireframeInScene = false;
+	let uvFaceMesh = null;
+	let wireframeMesh = null;
+
+	let config = {
+		pointSize: 3,
+		pointColor: 'purple',
+		outerRingColor: 'orange',
+		outerRingWidth: 3,
+		triangulationColor: 'cyan',
+		triangulationWidth: 2,
+		invertDepth: true,
+		scaleFactor: 1, // Placeholder, set dynamically
+		baseElevation: 5 // Elevation above the canvas floor in 3D units
+	};
+
+	const targetSceneWidth = 10; // Target width in 3D scene units
+
 	onMount(() => {
 		mainScene = createThreeDScene({
 			canvas,
@@ -41,11 +49,6 @@
 		});
 	});
 
-	/**
-	 * Load an image from a given URL and return as an HTMLImageElement.
-	 * @param {string} url - The URL of the image to load.
-	 * @returns {Promise<HTMLImageElement>}
-	 */
 	async function loadImage(url) {
 		return new Promise((resolve, reject) => {
 			const img = new Image();
@@ -71,7 +74,15 @@
 		if (mainScene && imageFile) {
 			try {
 				const success = await addImageToScene(mainScene, imageFile);
-				imageInScene = success;
+				if (success) {
+					imageInScene = true;
+
+					// Load the image to get its width
+					const img = await loadImage(imageUrl);
+
+					// Set scaleFactor dynamically based on image width
+					config.scaleFactor = targetSceneWidth / img.width;
+				}
 			} catch (error) {
 				console.error('Error adding image to canvas:', error);
 			}
@@ -126,6 +137,12 @@
 		stage = 'upload';
 	}
 
+	function handleAdd3DObjects() {
+		stage = '3d';
+		add3DObjects();
+		addTexturedFace();
+	}
+
 	async function add3DObjects() {
 		if (!visualizations.vertices || !visualizations.indices) {
 			console.warn('No vertices or indices available in visualizations for 3D objects.');
@@ -141,10 +158,64 @@
 			const img = await loadImage(imageUrl);
 			const imageWidth = img.width;
 			const imageHeight = img.height;
-			add3DObjectsToScene(mainScene, visualizations, config, imageWidth, imageHeight);
-			console.log('3D Objects added to the canvas.');
+			wireframeMesh = add3DObjectsToScene(
+				mainScene,
+				visualizations,
+				config,
+				imageWidth,
+				imageHeight
+			);
+			isWireframeInScene = true;
+			console.log('3D Wireframe added to the canvas.');
 		} catch (error) {
 			console.error('Error adding 3D objects:', error);
+		}
+	}
+
+	async function addTexturedFace() {
+		if (!visualizations.vertices || !visualizations.indices) {
+			console.warn('No vertices or indices available for the textured face model.');
+			return;
+		}
+
+		if (!imageUrl) {
+			console.warn('No valid imageUrl available for loading the 3D texture.');
+			return;
+		}
+
+		try {
+			const img = await loadImage(imageUrl);
+			uvFaceMesh = generateUVTexturedFace(mainScene, visualizations, img, config);
+			isUvFaceInScene = true;
+			console.log('Textured 3D Face Model added to the scene.');
+		} catch (error) {
+			console.error('Error adding textured 3D face model:', error);
+		}
+	}
+
+	function toggleUvFaceInScene() {
+		if (!isUvFaceInScene) {
+			addTexturedFace();
+		} else if (uvFaceMesh) {
+			mainScene.remove(uvFaceMesh);
+			uvFaceMesh.geometry.dispose();
+			uvFaceMesh.material.dispose();
+			uvFaceMesh = null;
+			isUvFaceInScene = false;
+			console.log('UV Textured Face removed from the scene.');
+		}
+	}
+
+	function toggleWireframeInScene() {
+		if (!isWireframeInScene) {
+			add3DObjects();
+		} else if (wireframeMesh) {
+			mainScene.remove(wireframeMesh);
+			wireframeMesh.geometry.dispose();
+			wireframeMesh.material.dispose();
+			wireframeMesh = null;
+			isWireframeInScene = false;
+			console.log('Wireframe removed from the scene.');
 		}
 	}
 
@@ -154,36 +225,42 @@
 	}
 </script>
 
-<div class="container">
-	<div class="sidebar">
-		<h1>Face Map Studio</h1>
+<div class="sidebar">
+	<h1>Image to Mesh 3D</h1>
+	<p>Upload a portrait to get started</p>
 
-		<!-- Display FileUploader for file selection and preview -->
-		{#if stage === 'upload' || stage === 'preview'}
-			{#if loadingStage}
-				<p>Loading... {stage}</p>
-			{:else}
-				<FileUploader {imageUrl} on:imageUpload={handleImageUpload} on:submit={handleFileSubmit} />
-			{/if}
-
-			<!-- PredictionPreview for toggling overlays, adding to canvas, and adding 3D objects -->
-		{:else if stage === 'prediction'}
-			{#if loadingStage}
-				<p>Loading... {stage}</p>
-			{:else}
-				<PredictionPreview
-					{imageUrl}
-					{visualizations}
-					on:addToCanvas={add3DObjects}
-					on:clearOverlays={clearOverlays}
-				/>
-			{/if}
+	{#if stage === 'upload' || stage === 'preview'}
+		{#if loadingStage}
+			<p>Loading... {stage}</p>
+		{:else}
+			<FileUploader {imageUrl} on:imageUpload={handleImageUpload} on:submit={handleFileSubmit} />
 		{/if}
-	</div>
-
-	<!-- Bind the canvas for 3D scene rendering -->
-	<canvas bind:this={canvas}></canvas>
+	{:else if stage === 'prediction'}
+		{#if loadingStage}
+			<p>Loading... {stage}</p>
+		{:else}
+			<PredictionPreview
+				{imageUrl}
+				{visualizations}
+				on:addToCanvas={handleAdd3DObjects}
+				on:clearOverlays={clearOverlays}
+			/>
+		{/if}
+	{:else if stage === '3d'}
+		{#if loadingStage}
+			<p>Loading... {stage}</p>
+		{:else}
+			<button on:click={toggleUvFaceInScene}>
+				{isUvFaceInScene ? 'Remove UV Textured Face' : 'Add UV Textured Face'}
+			</button>
+			<button on:click={toggleWireframeInScene}>
+				{isWireframeInScene ? 'Remove Wireframe' : 'Add Wireframe'}
+			</button>
+		{/if}
+	{/if}
 </div>
+
+<canvas bind:this={canvas}></canvas>
 
 <style>
 	:global(body) {
@@ -191,27 +268,35 @@
 		overflow: hidden;
 	}
 
-	.container {
-		display: flex;
+	.canvas-container {
+		position: fixed;
+		top: 0;
+		left: 0;
 		width: 100vw;
 		height: 100vh;
-	}
-
-	.sidebar {
-		width: 20vw;
-		flex-shrink: 0;
-		background-color: #333;
-		color: white;
-		padding: 20px;
-		box-sizing: border-box;
-		max-height: 100vh;
-		overflow-y: auto;
+		overflow: hidden;
+		z-index: 1;
 	}
 
 	canvas {
-		width: 80vw;
-		height: 100vh;
+		width: 100%;
+		height: 100%;
 		display: block;
+		background-color: #202020; /* Adjust as needed */
+		position: absolute;
+	}
+
+	.sidebar {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100%;
+		max-width: 40vw;
+		color: white;
+		padding: 20px;
+		box-sizing: border-box;
+		overflow-y: auto;
+		z-index: 10;
 	}
 
 	button {

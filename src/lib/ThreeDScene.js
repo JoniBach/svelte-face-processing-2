@@ -33,9 +33,14 @@ const initializeMainCamera = (aspectRatio) => {
  * @param {number} backgroundColor - Background color for the renderer
  * @returns {THREE.WebGLRenderer} - The initialized renderer
  */
-const initializeRenderer = (canvas, width, height, backgroundColor) => {
+const initializeRenderer = (
+	canvas,
+	width = window.innerWidth,
+	height = window.innerHeight,
+	backgroundColor
+) => {
 	const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-	renderer.setSize(width, height);
+	renderer.setSize(width, height); // Set renderer size to fill the entire viewport or specified dimensions
 	renderer.setPixelRatio(window.devicePixelRatio);
 	renderer.setClearColor(backgroundColor);
 	return renderer;
@@ -82,13 +87,13 @@ const addLighting = (scene) => {
  * @param {THREE.WebGLRenderer} renderer - The renderer
  * @param {HTMLCanvasElement} canvas - The canvas element
  */
-const handleResize = (camera, renderer, canvas) => {
-	const width = canvas.clientWidth;
-	const height = canvas.clientHeight;
+const handleResize = (camera, renderer) => {
+	const width = window.innerWidth;
+	const height = window.innerHeight;
 
 	camera.aspect = width / height;
 	camera.updateProjectionMatrix();
-	renderer.setSize(width, height);
+	renderer.setSize(width, height); // Use the full viewport dimensions
 };
 
 /**
@@ -132,8 +137,11 @@ export function createThreeDScene({
 	// Set up camera controls
 	const controls = setupOrbitControls(mainCamera, renderer);
 
+	// Initial call to ensure correct dimensions on load
+	handleResize(mainCamera, renderer); // Force resize to set initial dimensions
+
 	// Handle window resize
-	window.addEventListener('resize', () => handleResize(mainCamera, renderer, canvas));
+	window.addEventListener('resize', () => handleResize(mainCamera, renderer));
 
 	// Start the rendering loop
 	startAnimationLoop(renderer, mainScene, mainCamera, controls);
