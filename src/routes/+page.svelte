@@ -1,5 +1,5 @@
 <script context="module">
-	export const ssr = false; // Disable SSR to prevent navigator issues
+	export const ssr = false;
 </script>
 
 <script>
@@ -10,6 +10,7 @@
 	import FileUploader from '../lib/components/FileUploader.svelte';
 	import PredictionPreview from '../lib/components/PredictionPreview.svelte';
 	import { addOverlaysToScene, clearScene } from '$lib/handlePredictionPreview.js';
+	import { add3DObjectsToScene } from '$lib/handle3DObjects.js';
 
 	const config = {
 		pointSize: 3,
@@ -17,7 +18,8 @@
 		outerRingColor: 'orange',
 		outerRingWidth: 3,
 		triangulationColor: 'cyan',
-		triangulationWidth: 1.5
+		triangulationWidth: 1.5,
+		invertDepth: true
 	};
 
 	let canvas;
@@ -26,7 +28,7 @@
 	let mainScene;
 	let imageInScene = false;
 	let visualizations = {};
-	let stage = 'upload'; // Controls which stage is displayed: 'upload' or 'prediction'
+	let stage = 'upload';
 
 	// Initialize the 3D scene on mount
 	onMount(() => {
@@ -38,21 +40,36 @@
 		});
 	});
 
-	// Handle file upload
+	/**
+	 * Load an image from a given URL and return as an HTMLImageElement.
+	 * @param {string} url - The URL of the image to load.
+	 * @returns {Promise<HTMLImageElement>}
+	 */
+	async function loadImage(url) {
+		return new Promise((resolve, reject) => {
+			const img = new Image();
+			img.crossOrigin = 'Anonymous';
+			img.src = url;
+			img.onload = () => resolve(img);
+			img.onerror = (error) => {
+				console.error(`Failed to load image from URL: ${url}`, error);
+				reject(error);
+			};
+		});
+	}
+
 	function handleImageUpload(event) {
 		imageFile = event.detail.file;
 		imageUrl = URL.createObjectURL(imageFile);
-		imageInScene = false; // Reset image status in scene
-		stage = 'preview'; // Move to preview stage after upload
+		imageInScene = false;
+		stage = 'preview';
 	}
 
-	// Add image to the Three.js canvas
 	async function handleAddToCanvas() {
 		if (mainScene && imageFile) {
 			try {
 				const success = await addImageToScene(mainScene, imageFile);
 				imageInScene = success;
-				console.log('Image successfully added to canvas.');
 			} catch (error) {
 				console.error('Error adding image to canvas:', error);
 			}
@@ -61,42 +78,65 @@
 		}
 	}
 
-	// Create predictions and generate overlay images
 	async function createPredictions() {
 		if (!imageUrl) return;
 
 		const { handlePredictions } = await import('$lib/handlePredictions.js');
 		visualizations = await handlePredictions(imageUrl, config);
-		stage = 'prediction'; // Switch to prediction preview stage after processing
+
+		if (visualizations.vertices && visualizations.indices) {
+			console.log('Predictions data for 3D:', visualizations);
+		} else {
+			console.warn('Predictions did not return vertices or indices for 3D rendering.');
+		}
+
+		stage = 'prediction';
 	}
 
-	// Add overlays as textures to the Three.js canvas based on user selections
 	async function addOverlays(event) {
 		const { showKeypoints, showOuterRing, showTriangulation } = event.detail;
-		const img = new Image();
-		img.src = imageUrl;
+		const img = await loadImage(imageUrl);
 
-		img.onload = async () => {
-			const imageAspectRatio = img.width / img.height;
-			const baseHeight = 10; // Set the base height for the plane
+		const imageAspectRatio = img.width / img.height;
+		const baseHeight = 10;
 
-			await addOverlaysToScene(
-				mainScene,
-				visualizations,
-				showTriangulation,
-				showOuterRing,
-				showKeypoints,
-				imageAspectRatio,
-				baseHeight
-			);
-		};
+		await addOverlaysToScene(
+			mainScene,
+			visualizations,
+			showTriangulation,
+			showOuterRing,
+			showKeypoints,
+			imageAspectRatio,
+			baseHeight
+		);
 	}
 
-	// Clear all overlays from the Three.js scene
 	function clearOverlays() {
 		clearScene(mainScene);
 		imageInScene = false;
-		stage = 'upload'; // Reset to upload stage
+		stage = 'upload';
+	}
+
+	async function add3DObjects() {
+		if (!visualizations.vertices || !visualizations.indices) {
+			console.warn('No vertices or indices available in visualizations for 3D objects.');
+			return;
+		}
+
+		if (!imageUrl) {
+			console.warn('No valid imageUrl available for loading the 3D objects.');
+			return;
+		}
+
+		try {
+			const img = await loadImage(imageUrl);
+			const imageWidth = img.width;
+			const imageHeight = img.height;
+			add3DObjectsToScene(mainScene, visualizations, config, imageWidth, imageHeight);
+			console.log('3D Objects added to the canvas.');
+		} catch (error) {
+			console.error('Error adding 3D objects:', error);
+		}
 	}
 
 	function handleFileSubmit() {
@@ -114,7 +154,7 @@
 		{#if stage === 'upload' || stage === 'preview'}
 			<FileUploader {imageUrl} on:imageUpload={handleImageUpload} on:submit={handleFileSubmit} />
 
-			<!-- PredictionPreview for toggling overlays and adding to canvas -->
+			<!-- PredictionPreview for toggling overlays, adding to canvas, and adding 3D objects -->
 		{:else if stage === 'prediction'}
 			<PredictionPreview
 				{imageUrl}
@@ -122,6 +162,7 @@
 				on:addToCanvas={addOverlays}
 				on:clearOverlays={clearOverlays}
 			/>
+			<button on:click={add3DObjects}>Add 3D Objects to Canvas</button>
 		{/if}
 	</div>
 
@@ -148,8 +189,8 @@
 		color: white;
 		padding: 20px;
 		box-sizing: border-box;
-		max-height: 100vh; /* Set maximum height to the viewport height */
-		overflow-y: auto; /* Enable vertical scrolling */
+		max-height: 100vh;
+		overflow-y: auto;
 	}
 
 	canvas {

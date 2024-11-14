@@ -17,12 +17,11 @@ async function initializeDetector() {
 		}
 	);
 }
-
 /**
- * Perform facial landmark detection on an image
+ * Perform facial landmark detection on an image and generate visualization data.
  * @param {string} imageUrl - The URL of the image to process
  * @param {Object} [config={}] - Configuration options for visual customization
- * @returns {Promise<Object>} - An object with visualization images as data URLs
+ * @returns {Promise<Object>} - An object with visualization images as data URLs, vertices, and indices
  */
 export async function handlePredictions(imageUrl, config = {}) {
 	const image = await loadImage(imageUrl);
@@ -40,14 +39,15 @@ export async function handlePredictions(imageUrl, config = {}) {
 	}
 
 	const keypoints = predictions[0].keypoints;
+	const { vertices, indices } = calculateVerticesAndIndices(keypoints, width, height);
 
-	// Create separate canvases for each visualization
+	// Generate 2D visualizations on separate canvases
 	const keypointsCanvas = createCanvas(width, height);
 	const outerRingCanvas = createCanvas(width, height);
 	const triangulationCanvas = createCanvas(width, height);
 	const combinedCanvas = createCanvas(width, height);
 
-	// Draw each visualization on its respective canvas using the config options
+	// Draw visualizations using the config options
 	drawKeypoints(
 		keypointsCanvas.getContext('2d'),
 		keypoints,
@@ -68,13 +68,36 @@ export async function handlePredictions(imageUrl, config = {}) {
 	);
 	drawCombinedOverlay(combinedCanvas.getContext('2d'), keypoints, config);
 
-	// Convert each canvas to a data URL and return
+	// Return visualization images, vertices, and indices for 3D rendering
 	return {
 		keypointsImage: keypointsCanvas.toDataURL(),
 		outerRingImage: outerRingCanvas.toDataURL(),
 		triangulationImage: triangulationCanvas.toDataURL(),
-		combinedImage: combinedCanvas.toDataURL()
+		combinedImage: combinedCanvas.toDataURL(),
+		vertices,
+		indices
 	};
+}
+
+/**
+ * Calculate 3D vertices and indices from keypoints
+ * @param {Array<Object>} keypoints - Array of facial keypoints
+ * @param {number} width - Width of the image
+ * @param {number} height - Height of the image
+ * @returns {Object} - An object containing vertices and indices for 3D rendering
+ */
+function calculateVerticesAndIndices(keypoints, width, height) {
+	const vertices = [];
+	keypoints.forEach(({ x, y, z }) => {
+		vertices.push(x - width / 2, -(y - height / 2), z || 0); // Center and flip y
+	});
+
+	const indices = [];
+	for (let i = 0; i < TRIANGULATION.length; i += 3) {
+		indices.push(TRIANGULATION[i], TRIANGULATION[i + 1], TRIANGULATION[i + 2]);
+	}
+
+	return { vertices, indices };
 }
 
 /**
