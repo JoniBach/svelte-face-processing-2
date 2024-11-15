@@ -259,6 +259,7 @@
 <div class="sidebar">
 	<h1>Image to Mesh 3D</h1>
 	<p>Upload a portrait to get started</p>
+	<p>Note: some browsers are not currently supported</p>
 
 	{#if errorMessage}
 		<p class="error">{errorMessage}</p>
