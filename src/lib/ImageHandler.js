@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 
 /**
- * Adds an uploaded image as a textured plane to the 3D scene at the origin
+ * Adds an uploaded image as a textured plane to the 3D scene at the specified position
  * with its original aspect ratio.
  * @param {THREE.Scene} scene - The main 3D scene
  * @param {File} imageFile - The uploaded image file
+ * @param {THREE.Vector3} position - The position of the image plane in the scene
  * @returns {Promise<boolean>} - Resolves to true if image loads successfully, false otherwise
  */
-export function addImageToScene(scene, imageFile) {
+export function addImageToScene(scene, imageFile, position = new THREE.Vector3(0, 0, 0)) {
 	return new Promise((resolve) => {
 		const reader = new FileReader();
 
@@ -34,7 +35,7 @@ export function addImageToScene(scene, imageFile) {
 						});
 						const plane = new THREE.Mesh(geometry, material);
 
-						plane.position.set(0, 0, 0);
+						plane.position.copy(position);
 						plane.rotation.x = -Math.PI / 2;
 						scene.add(plane);
 
