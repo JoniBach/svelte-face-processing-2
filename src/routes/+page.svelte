@@ -6,7 +6,7 @@
 	import { onMount } from 'svelte';
 	import * as THREE from 'three';
 	import { createThreeDScene } from '$lib/ThreeDScene.js';
-	import { addImageToScene } from '$lib/ImageHandler.js';
+	import { addImageToScene, loadImage } from '$lib/ImageHandler.js';
 	import FileUploader from '../lib/components/FileUploader.svelte';
 	import PredictionPreview from '../lib/components/PredictionPreview.svelte';
 	import { addOverlaysToScene, clearScene } from '$lib/handlePredictionPreview.js';
@@ -14,24 +14,13 @@
 	import { handleDepthEstimation } from '$lib/handleDepthEstimation.js';
 	import JSZip from 'jszip';
 	import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
+	import { processDownloadAssets } from '$lib/handleDownloads.js';
 
 	let canvas;
-	let imageFile = null;
-	let imageUrl = '';
 	let mainScene;
-	let imageInScene = false;
-	let visualizations = {};
-	let stage = 'upload';
-	let loadingStage = false;
-	let errorMessage = '';
-	let depthMapImage = '';
 
-	let isUvFaceInScene = false;
-	let isWireframeInScene = false;
-	let uvFaceMesh = null;
-	let wireframeMesh = null;
-
-	let config = {
+	// Configuration object
+	const config = {
 		pointSize: 3,
 		pointColor: 'purple',
 		outerRingColor: 'orange',
@@ -41,14 +30,27 @@
 		invertDepth: true,
 		scaleFactor: 1,
 		baseElevation: 5,
-		minDepth: 0, // Minimum depth value
-		maxDepth: 1, // Maximum depth value
-		outputDepthRange: [0, 1], // Normalize depth output between 0 and 1
+		minDepth: 0,
+		maxDepth: 1,
+		outputDepthRange: [0, 1],
 		invertDepthMap: false,
 		depthMapFormat: 'image/png'
 	};
-
 	const targetSceneWidth = 10;
+
+	// Individual state variables
+	let imageFile = null;
+	let imageUrl = '';
+	let imageInScene = false;
+	let visualizations = {};
+	let stage = 'upload';
+	let loadingStage = false;
+	let errorMessage = '';
+	let depthMapImage = null;
+	let isUvFaceInScene = false;
+	let isWireframeInScene = false;
+	let uvFaceMesh = null;
+	let wireframeMesh = null;
 
 	onMount(() => {
 		try {
@@ -64,86 +66,180 @@
 		}
 	});
 
-	async function loadImage(url) {
-		try {
-			return await new Promise((resolve, reject) => {
-				const img = new Image();
-				img.crossOrigin = 'Anonymous';
-				img.src = url;
-				img.onload = () => resolve(img);
-				img.onerror = (error) => {
-					console.error(`Failed to load image from URL: ${url}`, error);
-					reject(error);
-				};
-			});
-		} catch (error) {
-			errorMessage = 'Failed to load image.';
-			throw error;
+	// Event Handlers
+
+	async function handleImageUpload(event) {
+		// Handler function that assigns state variables
+		const result = await processImageUpload(event);
+		if (result.error) {
+			errorMessage = result.error;
+		} else {
+			imageFile = result.imageFile;
+			imageUrl = result.imageUrl;
+			imageInScene = result.imageInScene;
+			stage = result.stage;
+			config.scaleFactor = result.scaleFactor;
 		}
 	}
 
-	function handleImageUpload(event) {
-		imageFile = event.detail.file;
-		imageUrl = URL.createObjectURL(imageFile);
-		imageInScene = false;
-		stage = 'preview';
-		handleAddToCanvas();
+	async function handleFileSubmit() {
+		const result = await processFileSubmit(imageUrl);
+		if (result.error) {
+			errorMessage = result.error;
+		} else {
+			visualizations = result.visualizations;
+			stage = result.stage;
+			await addOverlaysToScenePure(visualizations, imageUrl);
+		}
 	}
 
-	async function handleAddToCanvas() {
+	async function handleAdd3DObjects() {
+		const result = await processAdd3DObjects(visualizations, imageUrl);
+		if (result.error) {
+			errorMessage = result.error;
+		} else {
+			wireframeMesh = result.wireframeMesh;
+			isWireframeInScene = result.isWireframeInScene;
+			uvFaceMesh = result.uvFaceMesh;
+			isUvFaceInScene = result.isUvFaceInScene;
+			stage = result.stage;
+		}
+	}
+
+	async function toggleUvFaceInScene() {
+		const result = await processToggleUvFaceInScene(
+			isUvFaceInScene,
+			uvFaceMesh,
+			visualizations,
+			imageUrl
+		);
+		if (result.error) {
+			errorMessage = result.error;
+		} else {
+			uvFaceMesh = result.uvFaceMesh;
+			isUvFaceInScene = result.isUvFaceInScene;
+		}
+	}
+
+	async function toggleWireframeInScene() {
+		const result = await processToggleWireframeInScene(
+			isWireframeInScene,
+			wireframeMesh,
+			visualizations,
+			imageUrl
+		);
+		if (result.error) {
+			errorMessage = result.error;
+		} else {
+			wireframeMesh = result.wireframeMesh;
+			isWireframeInScene = result.isWireframeInScene;
+		}
+	}
+
+	async function initiateDepthMapStage() {
+		loadingStage = true;
+		stage = 'depth';
+		const result = await handleDepthEstimation(imageFile, config);
+		if (result.error) {
+			errorMessage = result.error;
+		} else {
+			depthMapImage = result;
+			console.log('Depth map generated.');
+		}
+		loadingStage = false;
+	}
+
+	// Add textures and overlays
+	const overlayTypes = ['combinedImage', 'keypointsImage', 'triangulationImage', 'outerRingImage'];
+
+	async function downloadAssets() {
+		const result = await processDownloadAssets(
+			imageFile,
+			imageUrl,
+			depthMapImage,
+			visualizations,
+			uvFaceMesh,
+			overlayTypes
+		);
+		if (result.error) {
+			errorMessage = result.error;
+		} else {
+			console.log('Assets successfully downloaded!');
+		}
+	}
+
+	function clearOverlays() {
+		clearScene(mainScene);
+		imageInScene = false;
+		stage = 'upload';
+		visualizations = {};
+		isUvFaceInScene = false;
+		isWireframeInScene = false;
+		uvFaceMesh = null;
+		wireframeMesh = null;
+	}
+
+	// Processing Functions (Pure Functions)
+
+	async function processImageUpload(event) {
+		// Pure function that processes the event and returns the result
+		const imageFile = event.detail.file;
+		const imageUrl = URL.createObjectURL(imageFile);
+		const stage = 'preview';
+
+		const addResult = await processAddToCanvas(imageFile, imageUrl);
+		if (addResult.error) {
+			return { error: addResult.error };
+		} else {
+			const { imageInScene, scaleFactor } = addResult;
+			return { imageFile, imageUrl, imageInScene, stage, scaleFactor };
+		}
+	}
+
+	async function processAddToCanvas(imageFile, imageUrl) {
 		if (!mainScene || !imageFile) {
-			errorMessage = 'Image or scene is missing.';
 			console.warn('No image file or scene available to add to canvas.');
-			return;
+			return { error: 'Image or scene is missing.' };
 		}
 
 		try {
 			const success = await addImageToScene(mainScene, imageFile);
 			if (success) {
-				imageInScene = true;
 				const img = await loadImage(imageUrl);
-				config.scaleFactor = targetSceneWidth / img.width;
+				const scaleFactor = targetSceneWidth / img.width;
+				return { imageInScene: true, scaleFactor };
+			} else {
+				return { error: 'Failed to add image to canvas.' };
 			}
 		} catch (error) {
 			console.error('Error adding image to canvas:', error);
-			errorMessage = 'Failed to add image to canvas.';
+			return { error: 'Failed to add image to canvas.' };
 		}
 	}
 
-	async function createPredictions() {
-		loadingStage = true;
-		errorMessage = '';
+	async function processFileSubmit(imageUrl) {
 		if (!imageUrl) {
-			errorMessage = 'No image URL provided for predictions.';
-			return;
+			return { error: 'No image URL provided for predictions.' };
 		}
 
 		try {
 			const { handlePredictions } = await import('$lib/handlePredictions.js');
-			visualizations = await handlePredictions(imageUrl, config);
+			const visualizations = await handlePredictions(imageUrl, config);
 
 			if (!visualizations.vertices || !visualizations.indices) {
 				console.warn('Predictions did not return vertices or indices for 3D rendering.');
-				errorMessage = 'Prediction data is incomplete for 3D rendering.';
+				return { error: 'Prediction data is incomplete for 3D rendering.' };
 			} else {
-				console.log('Predictions data for 3D:', visualizations);
-				stage = 'prediction';
+				const stage = 'prediction';
+				return { visualizations, stage };
 			}
 		} catch (error) {
 			console.error('Error generating predictions:', error);
-			errorMessage = 'Failed to generate predictions.';
-		} finally {
-			loadingStage = false;
-			addOverlays();
+			return { error: 'Failed to generate predictions.' };
 		}
 	}
 
-	async function addOverlays(event) {
-		const { showKeypoints, showOuterRing, showTriangulation } = event?.detail || {
-			showKeypoints: true,
-			showOuterRing: true,
-			showTriangulation: true
-		};
+	async function addOverlaysToScenePure(visualizations, imageUrl) {
 		try {
 			const img = await loadImage(imageUrl);
 			const imageAspectRatio = img.width / img.height;
@@ -152,9 +248,9 @@
 			await addOverlaysToScene(
 				mainScene,
 				visualizations,
-				showTriangulation,
-				showOuterRing,
-				showKeypoints,
+				true, // showTriangulation
+				true, // showOuterRing
+				true, // showKeypoints
 				imageAspectRatio,
 				baseHeight
 			);
@@ -164,78 +260,54 @@
 		}
 	}
 
-	function clearOverlays() {
-		try {
-			clearScene(mainScene);
-			imageInScene = false;
-			stage = 'upload';
-		} catch (error) {
-			console.error('Error clearing overlays:', error);
-			errorMessage = 'Failed to clear overlays.';
-		}
-	}
-
-	function handleAdd3DObjects() {
-		stage = '3d';
-		add3DObjects();
-		addTexturedFace();
-	}
-
-	async function add3DObjects() {
+	async function processAdd3DObjects(visualizations, imageUrl) {
 		if (!visualizations.vertices || !visualizations.indices) {
-			errorMessage = 'No vertices or indices available for 3D objects.';
-			return;
+			return { error: 'No vertices or indices available for 3D objects.' };
 		}
 
 		if (!imageUrl) {
-			errorMessage = 'No valid image URL for loading 3D objects.';
-			return;
+			return { error: 'No valid image URL for loading 3D objects.' };
 		}
 
 		try {
 			const img = await loadImage(imageUrl);
 			const imageWidth = img.width;
 			const imageHeight = img.height;
-			wireframeMesh = add3DObjectsToScene(
+
+			const wireframeMesh = add3DObjectsToScene(
 				mainScene,
 				visualizations,
 				config,
 				imageWidth,
 				imageHeight
 			);
-			isWireframeInScene = true;
+			const isWireframeInScene = true;
 			console.log('3D Wireframe added to the canvas.');
+
+			const uvFaceMesh = generateUVTexturedFace(mainScene, visualizations, img, config);
+			const isUvFaceInScene = true;
+			console.log('Textured 3D Face Model added to the scene.');
+
+			const stage = '3d';
+
+			return { wireframeMesh, isWireframeInScene, uvFaceMesh, isUvFaceInScene, stage };
 		} catch (error) {
 			console.error('Error adding 3D objects:', error);
-			errorMessage = 'Failed to add 3D objects.';
+			return { error: 'Failed to add 3D objects.' };
 		}
 	}
 
-	async function addTexturedFace() {
-		if (!visualizations.vertices || !visualizations.indices) {
-			errorMessage = 'No vertices or indices available for the textured face model.';
-			return;
-		}
-
-		if (!imageUrl) {
-			errorMessage = 'No valid image URL for loading 3D texture.';
-			return;
-		}
-
-		try {
-			const img = await loadImage(imageUrl);
-			uvFaceMesh = generateUVTexturedFace(mainScene, visualizations, img, config);
-			isUvFaceInScene = true;
-			console.log('Textured 3D Face Model added to the scene.');
-		} catch (error) {
-			console.error('Error adding textured 3D face model:', error);
-			errorMessage = 'Failed to add textured 3D face model.';
-		}
-	}
-
-	function toggleUvFaceInScene() {
+	async function processToggleUvFaceInScene(isUvFaceInScene, uvFaceMesh, visualizations, imageUrl) {
 		if (!isUvFaceInScene) {
-			addTexturedFace();
+			try {
+				const img = await loadImage(imageUrl);
+				uvFaceMesh = generateUVTexturedFace(mainScene, visualizations, img, config);
+				isUvFaceInScene = true;
+				console.log('UV Textured Face added to the scene.');
+			} catch (error) {
+				console.error('Error adding textured 3D face model:', error);
+				return { error: 'Failed to add textured 3D face model.' };
+			}
 		} else if (uvFaceMesh) {
 			mainScene.remove(uvFaceMesh);
 			uvFaceMesh.geometry.dispose();
@@ -244,11 +316,33 @@
 			isUvFaceInScene = false;
 			console.log('UV Textured Face removed from the scene.');
 		}
+		return { uvFaceMesh, isUvFaceInScene };
 	}
 
-	function toggleWireframeInScene() {
+	async function processToggleWireframeInScene(
+		isWireframeInScene,
+		wireframeMesh,
+		visualizations,
+		imageUrl
+	) {
 		if (!isWireframeInScene) {
-			add3DObjects();
+			try {
+				const img = await loadImage(imageUrl);
+				const imageWidth = img.width;
+				const imageHeight = img.height;
+				wireframeMesh = add3DObjectsToScene(
+					mainScene,
+					visualizations,
+					config,
+					imageWidth,
+					imageHeight
+				);
+				isWireframeInScene = true;
+				console.log('Wireframe added to the scene.');
+			} catch (error) {
+				console.error('Error adding wireframe:', error);
+				return { error: 'Failed to add wireframe.' };
+			}
 		} else if (wireframeMesh) {
 			mainScene.remove(wireframeMesh);
 			wireframeMesh.geometry.dispose();
@@ -257,257 +351,7 @@
 			isWireframeInScene = false;
 			console.log('Wireframe removed from the scene.');
 		}
-	}
-
-	async function initiateDepthMapStage() {
-		loadingStage = true;
-		stage = 'depth';
-		const depthMapRes = await handleDepthEstimation(imageFile, config);
-		console.log(depthMapRes);
-		depthMapImage = depthMapRes;
-		loadingStage = false;
-	}
-
-	function handleFileSubmit() {
-		stage = 'prediction';
-		createPredictions();
-	}
-
-	async function addDe() {
-		if (!mainScene || !imageFile) {
-			errorMessage = 'Image or scene is missing.';
-			console.warn('No image file or scene available to add to canvas.');
-			return;
-		}
-
-		try {
-			// Ensure depth map is generated
-			if (!depthMapImage) {
-				console.log('Generating depth map...');
-				await initiateDepthMapStage();
-			}
-
-			// Load the original image
-			const img = await loadImage(imageUrl);
-
-			// Check if vertices and indices are available for UV mapping
-			if (visualizations.vertices && visualizations.indices) {
-				console.log('Applying UV face with displacement to canvas...');
-				// Apply UV face with displacement to the canvas
-				const displacedFaceMesh = await applyDisplacementToUVFace(
-					mainScene,
-					visualizations,
-					img,
-					depthMapImage, // Use the generated depth map blob
-					{
-						scaleFactor: config.scaleFactor,
-						baseElevation: config.baseElevation,
-						invertDepth: config.invertDepth
-					}
-				);
-
-				if (displacedFaceMesh) {
-					imageInScene = true;
-					console.log('Displacement applied and UV face added to canvas.');
-				} else {
-					console.error('Failed to add UV face with displacement to canvas.');
-					errorMessage = 'Failed to add UV face with displacement.';
-				}
-			} else {
-				console.warn('No UV data available, adding plain image instead.');
-				// Fall back to adding a plain image to the canvas
-				const success = await addImageToScene(mainScene, imageFile);
-				if (success) {
-					imageInScene = true;
-					console.log('Plain image added to canvas.');
-				}
-			}
-		} catch (error) {
-			console.error('Error adding to canvas:', error);
-			errorMessage = 'Failed to add to canvas.';
-		}
-	}
-	export async function applyDisplacementToUVFace(
-		scene,
-		visualizations,
-		textureImage,
-		depthMapBlob,
-		config
-	) {
-		const { vertices, indices } = visualizations;
-
-		if (!vertices || !indices) {
-			console.error('Vertices or indices missing for UV mapping.');
-			return;
-		}
-
-		// Convert depth map blob to a texture
-		const depthMapUrl = URL.createObjectURL(depthMapBlob);
-		const depthMapTexture = await new THREE.TextureLoader().loadAsync(depthMapUrl);
-
-		// Adjust geometry scale based on config
-		const adjustedVertices = vertices.map(
-			(v, i) => (i % 3 === 2 && config.invertDepth ? -v : v) * config.scaleFactor
-		);
-
-		// Create indexed geometry
-		const faceGeometry = new THREE.BufferGeometry();
-		faceGeometry.setAttribute('position', new THREE.Float32BufferAttribute(adjustedVertices, 3));
-		faceGeometry.setIndex(indices);
-
-		// Generate UV mapping for the texture
-		const uvs = [];
-		for (let i = 0; i < vertices.length; i += 3) {
-			const x = (vertices[i] + 0.5) / textureImage.width;
-			const y = (vertices[i + 1] + 0.5) / textureImage.height;
-			uvs.push(x, y);
-		}
-		faceGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-
-		// Compute smooth normals
-		faceGeometry.computeVertexNormals();
-
-		// Load the original texture
-		const uvTexture = new THREE.Texture(textureImage);
-		uvTexture.needsUpdate = true;
-
-		// Create the material
-		const faceMaterial = new THREE.MeshStandardMaterial({
-			map: uvTexture,
-			displacementMap: depthMapTexture,
-			displacementScale: config.scaleFactor * 0.1, // Adjust as needed
-			displacementBias: 0, // Align displacement properly
-			side: THREE.DoubleSide
-		});
-
-		// Create the mesh and apply displacement
-		const faceMesh = new THREE.Mesh(faceGeometry, faceMaterial);
-		faceMesh.rotation.x = -Math.PI / 2; // Align the mesh
-		faceMesh.position.y = config.baseElevation;
-
-		// Debugging: Log geometry attributes
-		console.log('Displacement applied:', {
-			vertices: faceGeometry.attributes.position.array,
-			uvs: faceGeometry.attributes.uv.array
-		});
-
-		// Add the mesh to the scene
-		scene.add(faceMesh);
-		console.log('Displacement successfully applied to the 3D face model.');
-		return faceMesh; // Return the mesh for further manipulation if needed
-	}
-
-	async function handleApplyDisplacement() {
-		try {
-			loadingStage = true;
-			const img = await loadImage(imageUrl);
-
-			const displacedFaceMesh = await applyDisplacementToUVFace(
-				mainScene,
-				visualizations,
-				img,
-				depthMapImage,
-				{
-					scaleFactor: config.scaleFactor,
-					baseElevation: config.baseElevation,
-					invertDepth: config.invertDepth
-				}
-			);
-
-			if (displacedFaceMesh) {
-				console.log('Displacement successfully applied to the 3D model.');
-			} else {
-				console.error('Failed to apply displacement.');
-			}
-			loadingStage = false;
-			stage = 'downloads';
-		} catch (error) {
-			console.error('Error applying displacement:', error);
-			errorMessage = 'An error occurred while applying displacement.';
-		}
-	}
-
-	async function downloadAssets() {
-		try {
-			const zip = new JSZip();
-			const assetsFolder = zip.folder('downloads');
-
-			// Prepare a list of promises for all files to be added
-			const promises = [];
-
-			// Add base image
-			if (imageFile) {
-				promises.push(
-					fetch(imageUrl)
-						.then((res) => res.blob())
-						.then((blob) => assetsFolder.file('base-image.png', blob))
-				);
-			}
-
-			// Add displacement map
-			if (depthMapImage) {
-				const depthMapBlobUrl = URL.createObjectURL(depthMapImage);
-				promises.push(
-					fetch(depthMapBlobUrl)
-						.then((res) => res.blob())
-						.then((blob) => assetsFolder.file('displacement-map.png', blob))
-				);
-			}
-
-			// Add textures
-			if (visualizations.combinedImage) {
-				promises.push(
-					fetch(visualizations.combinedImage)
-						.then((res) => res.blob())
-						.then((blob) => assetsFolder.file('texture-combined.png', blob))
-				);
-			}
-
-			// Add overlays (keypoints, triangulation, etc.)
-			const overlayTypes = ['keypointsImage', 'triangulationImage', 'outerRingImage'];
-			overlayTypes.forEach((overlay) => {
-				if (visualizations[overlay]) {
-					promises.push(
-						fetch(visualizations[overlay])
-							.then((res) => res.blob())
-							.then((blob) => assetsFolder.file(`${overlay}.png`, blob))
-					);
-				}
-			});
-
-			// Add 3D model (GLTF format)
-			if (uvFaceMesh) {
-				promises.push(
-					new Promise((resolve, reject) => {
-						const exporter = new GLTFExporter();
-						exporter.parse(
-							uvFaceMesh,
-							(result) => {
-								const blob = new Blob([JSON.stringify(result)], { type: 'application/json' });
-								assetsFolder.file('3d-model.glb', blob);
-								resolve();
-							},
-							{ binary: true }
-						);
-					})
-				);
-			}
-
-			// Wait for all assets to be added
-			await Promise.all(promises);
-
-			// Generate the ZIP file
-			const zipBlob = await zip.generateAsync({ type: 'blob' });
-			const link = document.createElement('a');
-			link.href = URL.createObjectURL(zipBlob);
-			link.download = 'downloads.zip';
-			link.click();
-
-			console.log('Assets successfully downloaded!');
-		} catch (error) {
-			console.error('Error while downloading assets:', error);
-			errorMessage = 'Failed to download assets.';
-		}
+		return { wireframeMesh, isWireframeInScene };
 	}
 </script>
 
@@ -547,7 +391,7 @@
 			<button on:click={toggleWireframeInScene}>
 				{isWireframeInScene ? 'Remove Wireframe' : 'Add Wireframe'}
 			</button>
-			<button on:click={initiateDepthMapStage}> Produce Depth Map </button>
+			<button on:click={initiateDepthMapStage}>Produce Depth Map</button>
 		{/if}
 	{:else if stage === 'depth'}
 		{#if loadingStage}
@@ -562,7 +406,6 @@
 				/>
 			</div>
 			<button on:click={downloadAssets}>Download Assets</button>
-			<!-- <button on:click={handleApplyDisplacement}>Add to Canvas</button> -->
 		{/if}
 	{:else if stage === 'downloads'}
 		{#if loadingStage}
@@ -601,7 +444,7 @@
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
-		opacity: 0.4; /* Adjust opacity to make it subtle in the background */
+		opacity: 0.4;
 	}
 	.canvas-container {
 		position: fixed;

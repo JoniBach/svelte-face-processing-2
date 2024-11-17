@@ -59,3 +59,21 @@ export function addImageToScene(scene, imageFile, position = new THREE.Vector3(0
 		}
 	});
 }
+
+/**
+ * Loads an image from a URL.
+ * @param {string} url - The URL of the image to load.
+ * @returns {Promise<HTMLImageElement>} A promise that resolves to the loaded image.
+ */
+export function loadImage(url) {
+	return new Promise((resolve, reject) => {
+		const img = new Image();
+		img.crossOrigin = 'Anonymous';
+		img.src = url;
+		img.onload = () => resolve(img);
+		img.onerror = (error) => {
+			console.error(`Failed to load image from URL: ${url}`, error);
+			reject(error);
+		};
+	});
+}
