@@ -1,10 +1,11 @@
 <script context="module">
+	import { facely } from './../lib';
+	import { pipeline } from './../lib/pipeline.js';
 	export const ssr = false;
 </script>
 
 <script>
 	import { onMount } from 'svelte';
-	import * as THREE from 'three';
 	import { createThreeDScene } from '$lib/ThreeDScene.js';
 	import { addImageToScene, loadImage } from '$lib/ImageHandler.js';
 	import FileUploader from '../lib/components/FileUploader.svelte';
@@ -12,8 +13,6 @@
 	import { addOverlaysToScene, clearScene } from '$lib/handlePredictionPreview.js';
 	import { add3DObjectsToScene, generateUVTexturedFace } from '$lib/handle3DObjects.js';
 	import { handleDepthEstimation } from '$lib/handleDepthEstimation.js';
-	import JSZip from 'jszip';
-	import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 	import { processDownloadAssets } from '$lib/handleDownloads.js';
 
 	let canvas;
@@ -52,6 +51,8 @@
 	let uvFaceMesh = null;
 	let wireframeMesh = null;
 
+	let facelyRes = null;
+
 	onMount(() => {
 		try {
 			mainScene = createThreeDScene({
@@ -70,16 +71,22 @@
 
 	async function handleImageUpload(event) {
 		// Handler function that assigns state variables
-		const result = await processImageUpload(event);
-		if (result.error) {
-			errorMessage = result.error;
-		} else {
-			imageFile = result.imageFile;
-			imageUrl = result.imageUrl;
-			imageInScene = result.imageInScene;
-			stage = result.stage;
-			config.scaleFactor = result.scaleFactor;
-		}
+		// const result = await processImageUpload(event);
+		// if (result.error) {
+		// 	errorMessage = result.error;
+		// } else {
+		// 	imageFile = result.imageFile;
+		// 	imageUrl = result.imageUrl;
+		// 	imageInScene = result.imageInScene;
+		// 	stage = result.stage;
+		// 	config.scaleFactor = result.scaleFactor;
+		// }
+
+		const imageFile = event.detail.file;
+		const progressEvent = (e) => console.log(e)
+		const res = await facely(imageFile, canvas, progressEvent)
+		facelyRes = res
+		console.log(res)
 	}
 
 	async function handleFileSubmit() {
@@ -416,6 +423,16 @@
 		{/if}
 	{:else}
 		<p>Unknown stage: {stage}</p>
+	{/if}
+
+	{#if facelyRes}
+		<button on:click={() => facelyRes.add.image()}>Add Image</button>
+		<button on:click={() => facelyRes.add.wireframe()}>Add Wireframe</button>
+		<button on:click={() => facelyRes.add.edges()}>Add Edges</button>
+		<button on:click={() => facelyRes.add.vertices()}>Add Vertices</button>
+		<button on:click={() => facelyRes.add.faces()}>Add Faces</button>
+		<button on:click={() => facelyRes.add.uvFace()}>Add UV Face</button>
+		<button on:click={() => facelyRes.download()}>Download assets</button>
 	{/if}
 </div>
 

@@ -1,4 +1,3 @@
-import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-backend-webgl';
 import * as depthEstimation from '@tensorflow-models/depth-estimation';
 import * as THREE from 'three';

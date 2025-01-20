@@ -1,7 +1,5 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import TRIANGULATION from './TRIANGULATION.json';
-import OUTERRING from './OUTERRING.json';
 
 /**
  * Extract vertices, UV coordinates, and indices based on keypoints.

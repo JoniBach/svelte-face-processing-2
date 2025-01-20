@@ -36,10 +36,10 @@ export function addImageToScene(scene, imageFile, position = new THREE.Vector3(0
 						const plane = new THREE.Mesh(geometry, material);
 
 						plane.position.copy(position);
-						plane.rotation.x = -Math.PI / 2;
+						// plane.rotation.x = -Math.PI / 2;
 						scene.add(plane);
 
-						console.log('Plane added to scene with original aspect ratio');
+						// console.log('Plane added to scene with original aspect ratio');
 						resolve(true); // Image loaded successfully
 					},
 					undefined,

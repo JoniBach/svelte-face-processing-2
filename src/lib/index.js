@@ -1,1 +1,1 @@
-// Reexport your entry components here
+export { pipeline as facely } from './pipeline.js';

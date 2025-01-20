@@ -1,6 +1,5 @@
 import JSZip from 'jszip';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
-import { addOverlaysToScene as overlayHandler } from '$lib/handlePredictionPreview.js';
 /**
  * Downloads assets (images, depth map, and 3D model) as a zip file.
  * @param {File} imageFile - The uploaded image file.
