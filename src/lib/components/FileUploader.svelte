@@ -38,6 +38,7 @@
 		</label>
 	{:else}
 		<!-- Display uploaded image preview with options to add or process -->
+		 
 		<div class="image-box">
 			<img src={imageUrl} alt="Uploaded Image" />
 		</div>

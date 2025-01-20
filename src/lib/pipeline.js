@@ -37,7 +37,7 @@ const reportProgress = (stage, total, message, complete) => {
 	const isComplete = stage === total;
 	return {
 		message,
-		percentage: isComplete ? (complete ? 100 : 99) : percentage,
+		percent: isComplete ? (complete ? 100 : 99) : percentage,
 		stage: `${stage}/${total}`
 	};
 };
